@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "maximumPublishedOptions": 200,
+  "note": "실제 상품이 아닌 운영자 후보 검색 계획. API 응답만으로 자동 승인하지 않습니다.",
+  "groups": [
+    { "category": "desk", "limit": 35, "keywords": ["원룸 책상 1200", "컴퓨터 책상 1400", "책상 1800", "ㄱ자 책상 1800"] },
+    { "category": "storage", "limit": 45, "keywords": ["철제 선반 600", "수납장 800", "3단 서랍장", "수납 카트"] },
+    { "category": "clothing", "limit": 25, "keywords": ["원룸 옷장", "커버 행거", "폭좁은 옷장"] },
+    { "category": "divider", "limit": 25, "keywords": ["원룸 파티션", "공간분리 커튼", "접이식 파티션"] },
+    { "category": "seating", "limit": 35, "keywords": ["슈퍼싱글 침대", "업무용 의자", "원룸 1인 소파"] },
+    { "category": "decor", "limit": 35, "keywords": ["스탠드 조명", "원룸 러그", "전신 거울"] }
+  ]
+}

@@ -6,3 +6,16 @@ tests/*.png
 tests/*.glb
 tests/*.zip
 tests/*run.log
+# Secrets, private operator drafts and generated builds
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+dist/
+data/*.tmp
+*catalog-draft*.json
+catalog-imports/
+playwright-report/
+test-results/
+__pycache__/
