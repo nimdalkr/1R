@@ -1,0 +1,57 @@
+/* 1R planner state. Centimetres, x/right and z/down in plan. No network access. */
+export const MAX_OBJECTS=250;
+export const STRUCTURAL=new Set(['bath','kitchen','door','window','wall']);
+export const DEFINITIONS={
+ bed:['침대',110,200,65,'#a7b3a1'],desk:['책상',180,75,74,'#d4b48b'],ldesk:['ㄱ자 책상',180,125,74,'#d4b48b'],chair:['의자',62,62,110,'#67776e'],sofa:['소파',140,78,80,'#bcb19e'],wardrobe:['옷장',100,58,205,'#e1dacc'],bookshelf:['책장',80,32,200,'#d6c5a7'],rack:['행거',120,50,175,'#555f59'],cart:['카트',40,45,90,'#dfded6'],box:['박스',50,40,35,'#bd966a'],monitor:['모니터',60,20,43,'#3e4843'],pc:['데스크탑',24,46,48,'#3e4843'],laptop:['노트북',34,25,23,'#9da8a2'],standby:['스탠바이미',68,44,140,'#e9e5da'],partition:['파티션',120,12,180,'#ba9b72'],rug:['러그',160,200,1,'#c6c0b1'],kitchen:['싱크대',220,60,220,'#e1ddd2'],bath:['화장실',150,170,240,'#d7d9d1'],door:['현관문',85,10,210,'#b7aa91'],window:['창문',180,10,115,'#b4cbd0'],wall:['벽',150,10,240,'#e2dfd5'],lamp:['조명',35,35,150,'#d8c8a6'],mirror:['거울',45,35,160,'#c4cfc9'],curtain:['커튼',160,10,220,'#e2d9c9'],shelf:['선반',80,35,90,'#d4bc95'],drawers:['서랍장',45,45,70,'#d7d4c8'],table:['테이블',90,60,74,'#d2b78f'],plant:['화분',30,30,70,'#859578'],decor:['소품',25,25,30,'#d2bfa4'],drying:['건조대',110,65,105,'#d5dbd4'],fridge:['냉장고',55,60,150,'#deded8'],microwave:['전자레인지',47,37,28,'#e9e6dd']
+};
+export const clone=v=>structuredClone(v);
+export const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
+export const radians=d=>d*Math.PI/180;
+export const rotate=(x,z,r)=>({x:x*Math.cos(radians(r))-z*Math.sin(radians(r)),z:x*Math.sin(radians(r))+z*Math.cos(radians(r))});
+export const uid=()=>globalThis.crypto?.randomUUID?.()||'id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
+export const number=(v,a,b)=>typeof v==='number'&&Number.isFinite(v)&&v>=a&&v<=b;
+export function makeObject(type,extra={}){if(!DEFINITIONS[type])throw Error('지원하지 않는 물건입니다.');const [name,w,d,h,color]=DEFINITIONS[type];return {id:uid(),type,name,w,d,h,color,x:0,z:0,e:type==='window'?88:0,r:0,ownership:STRUCTURAL.has(type)?'fixed':'unknown',placed:true,locked:false,note:'',...extra};}
+export function newDocument({w=400,d=550,h=240,name='내 원룸'}={}){return normalizeDocument({id:uid(),name,version:2,room:{w,d,h,structureLocked:false},objects:[]});}
+export function normalizeDocument(value){
+ if(!value||!value.room||!Array.isArray(value.objects)||value.objects.length>MAX_OBJECTS)throw Error('올바른 1R 배치 파일이 아닙니다.');
+ if(!['w','d'].every(k=>number(value.room[k],100,3000))||!number(value.room.h,100,600))throw Error('방 치수 범위를 확인하세요.');
+ const ids=new Set();
+ const objects=value.objects.map((o,i)=>{
+  if(!o||!Object.hasOwn(DEFINITIONS,o.type)||!['w','d','h'].every(k=>number(o[k],1,2000))||!['x','z'].every(k=>number(o[k],-3000,5000))||!number(o.r,-3600,3600))throw Error('물건의 종류 또는 치수가 올바르지 않습니다.');
+  if(o.e!=null&&!number(o.e,0,1500))throw Error('바닥에서 높이는 0~1500cm입니다.');
+  const id=(typeof o.id==='string'&&o.id.length<=80)||number(o.id,0,1e9)?o.id:i+1;
+  if(ids.has(String(id)))throw Error('물건 ID가 중복됩니다.');ids.add(String(id));
+  const n={id,type:o.type,name:String(o.name||DEFINITIONS[o.type][0]).slice(0,120),w:o.w,d:o.d,h:o.h,x:o.x,z:o.z,e:o.e??(o.type==='window'?88:0),r:((o.r%360)+360)%360,color:/^#[0-9a-f]{6}$/i.test(o.color)?o.color:DEFINITIONS[o.type][4],ownership:['owned','planned','fixed'].includes(o.ownership)?o.ownership:'unknown',placed:o.placed!==false,locked:o.locked===true,note:String(o.note||'').slice(0,1000)};
+  if(o.geometry?.kind==='l'&&['left','right'].includes(o.geometry.side)&&number(o.geometry.mainDepthCm,1,o.d)&&number(o.geometry.returnWidthCm,1,o.w))n.geometry=clone(o.geometry);
+  if(o.parent!=null)n.parent=o.parent;
+  if(o.viewerId!=null)n.viewerId=o.viewerId;
+  if(number(o.eyeHeight,1,300))n.eyeHeight=o.eyeHeight;
+  if(o.commerce&&typeof o.commerce.optionId==='string'&&o.commerce.dimensions){const cd=o.commerce.dimensions;if(['widthCm','depthCm','heightCm'].every(k=>number(cd[k],1,2000)))n.commerce={optionId:o.commerce.optionId.slice(0,80),type:String(o.commerce.type||o.type).slice(0,30),productName:String(o.commerce.productName||'').slice(0,200),optionLabel:String(o.commerce.optionLabel||'').slice(0,200),dimensions:clone(cd),boundAt:String(o.commerce.boundAt||'').slice(0,40)};}
+  return n;
+ });
+ const lookup=new Map(objects.map(o=>[String(o.id),o]));
+ for(const o of objects){if(o.parent!=null){if(!lookup.has(String(o.parent)))delete o.parent;else o.parent=lookup.get(String(o.parent)).id;}if(o.viewerId!=null){if(!lookup.has(String(o.viewerId)))delete o.viewerId;else o.viewerId=lookup.get(String(o.viewerId)).id;}const seen=new Set([String(o.id)]);let p=o;while(p.parent!=null){if(seen.has(String(p.parent)))throw Error('물건 연결이 순환합니다.');seen.add(String(p.parent));p=lookup.get(String(p.parent));if(!p)break;}}
+ return {version:2,unit:'cm',id:typeof value.id==='string'?value.id.slice(0,80):uid(),name:String(value.name||'내 원룸').slice(0,120),room:{w:value.room.w,d:value.room.d,h:value.room.h,structureLocked:value.room.structureLocked===true,measured:value.room.measured===true},objects};
+}
+export function footprint(o){let ps;
+ if(o.type==='ldesk'){const g=o.geometry||{mainDepthCm:Math.min(65,o.d*.55),returnWidthCm:Math.min(55,o.w*.3),side:'right'};ps=[[-o.w/2,-o.d/2],[o.w/2,-o.d/2],[o.w/2,o.d/2],[o.w/2-g.returnWidthCm,o.d/2],[o.w/2-g.returnWidthCm,-o.d/2+g.mainDepthCm],[-o.w/2,-o.d/2+g.mainDepthCm]];if(g.side==='left')ps=ps.map(([x,z])=>[-x,z]);}
+ else ps=[[-o.w/2,-o.d/2],[o.w/2,-o.d/2],[o.w/2,o.d/2],[-o.w/2,o.d/2]];
+ return ps.map(([x,z])=>{const p=rotate(x,z,o.r);return{x:o.x+p.x,z:o.z+p.z};});
+}
+export function inPolygon(p,ps){let yes=false;for(let i=0,j=ps.length-1;i<ps.length;j=i++){const a=ps[i],b=ps[j];if((a.z>p.z)!==(b.z>p.z)&&p.x<(b.x-a.x)*(p.z-a.z)/(b.z-a.z)+a.x)yes=!yes;}return yes;}
+export function isLocked(doc,o){return !!o&&(o.locked||(doc.room.structureLocked&&STRUCTURAL.has(o.type)));}
+export function requireEditable(doc,o){if(!o)throw Error('물건을 선택하세요.');if(isLocked(doc,o))throw Error('잠금을 먼저 해제하세요.');}
+export function descendants(doc,id){const out=[];const visit=pid=>{for(const o of doc.objects.filter(o=>String(o.parent)===String(pid))){out.push(o);visit(o.id);}};visit(id);return out;}
+export function updateObject(doc,id,patch){const o=doc.objects.find(o=>String(o.id)===String(id));if(!o)throw Error('물건을 찾을 수 없습니다.');const keys=Object.keys(patch);if(keys.some(k=>!['name','note','ownership','viewerId','eyeHeight','locked'].includes(k)))requireEditable(doc,o);
+ const children=descendants(doc,o.id),moves=['x','z','r','e'].some(k=>patch[k]!=null&&patch[k]!==o[k]);if(moves&&children.some(c=>isLocked(doc,c)))throw Error('연결된 물건의 잠금을 먼저 해제하세요.');
+ const old=clone(o);Object.assign(o,patch);try{normalizeDocument(doc);}catch(e){Object.assign(o,old);throw e;}
+ if(moves)for(const c of children){const p=rotate(c.x-old.x,c.z-old.z,o.r-old.r);c.x=o.x+p.x;c.z=o.z+p.z;c.r=(c.r+o.r-old.r+360)%360;c.e=Math.max(0,c.e+(o.e-old.e));}
+ return o;
+}
+export function addItems(doc,type,count=1,{placed=false,ownership='owned',w,d,h}={}){if(!Number.isInteger(count)||count<1||count>50||doc.objects.length+count>MAX_OBJECTS)throw Error('물건은 최대 250개, 한 번에 50개까지 추가할 수 있습니다.');if(doc.room.structureLocked&&STRUCTURAL.has(type))throw Error('구조 잠금을 먼저 해제하세요.');const added=[];for(let i=0;i<count;i++){const o=makeObject(type,{x:doc.room.w/2,z:doc.room.d/2,placed,ownership});for(const [k,v]of Object.entries({w,d,h}))if(v!=null){if(!number(v,1,2000))throw Error('물건 치수 범위를 확인하세요.');o[k]=v;}if(count>1)o.name+=' '+(i+1);added.push(o);}doc.objects.push(...added);return added;}
+export function setPlaced(doc,id,placed){const o=doc.objects.find(o=>String(o.id)===String(id));requireEditable(doc,o);const children=descendants(doc,id);if(children.some(c=>isLocked(doc,c)))throw Error('연결된 물건의 잠금을 먼저 해제하세요.');o.placed=placed;children.forEach(c=>c.placed=placed);}
+export function deleteObject(doc,id){const o=doc.objects.find(o=>String(o.id)===String(id));requireEditable(doc,o);const children=descendants(doc,id);if(children.some(c=>isLocked(doc,c)))throw Error('연결된 물건의 잠금을 먼저 해제하세요.');children.forEach(c=>c.placed=false);doc.objects=doc.objects.filter(a=>a!==o);for(const a of doc.objects){if(a.parent===o.id){delete a.parent;a.placed=false;}if(a.viewerId===o.id)delete a.viewerId;}}
+export function inventory(doc){const os=doc.objects.filter(o=>!STRUCTURAL.has(o.type));return{total:os.length,placed:os.filter(o=>o.placed).length,unplaced:os.filter(o=>!o.placed).length,boxes:os.filter(o=>o.type==='box').length,owned:os.filter(o=>o.ownership==='owned').length,planned:os.filter(o=>o.ownership==='planned').length};}
+export function changeRoom(doc,patch){if(doc.room.structureLocked)throw Error('구조 잠금을 먼저 해제하세요.');const test=normalizeDocument({...doc,room:{...doc.room,...patch}});doc.room=test.room;}
+export function lockStructure(doc,locked){doc.room.structureLocked=!!locked;}
+export function makeStore(initial){let doc=normalizeDocument(initial),past=[],future=[];return{get:()=>doc,history:()=>({undo:past.length,redo:future.length}),edit(fn){const old=clone(doc);try{fn(doc);doc=normalizeDocument(doc);}catch(e){doc=old;throw e;}if(JSON.stringify(old)!==JSON.stringify(doc)){past.push(old);past=past.slice(-60);future=[];}return doc;},replace(next){return this.edit(()=>{doc=normalizeDocument(next);});},undo(){if(past.length){future.push(clone(doc));doc=past.pop();}return doc;},redo(){if(future.length){past.push(clone(doc));doc=future.pop();}return doc;}};}
