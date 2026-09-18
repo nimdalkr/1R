@@ -1,17 +1,17 @@
-import {CATEGORIES,categoryOf,verifiedOptions,recommend,eligibility,bindingMatches,placementWarnings,boxCapacity,safeAffiliateUrl,safeProductImage,httpsUrl} from '/shared/catalog.mjs';
+import {CATEGORIES,categoryOf,verifiedOptions,recommend,eligibility,bindingMatches,placementWarnings,boxCapacity,safeAffiliateUrl,safeProductImage,httpsUrl} from '../shared/catalog.mjs';
 if(document.readyState==='loading') await new Promise(r=>document.addEventListener('DOMContentLoaded',r,{once:true}));
 const planner=window.OneR,$=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const state={open:false,tab:'recommend',options:[],status:null,loading:false,loaded:false,error:'',query:'',category:'',sort:'fit',includeOwned:false,maxWidth:'',maxDepth:'',maxHeight:'',box:{w:'',d:'',h:'',count:10},offers:new Map(),offerErrors:new Map(),busy:new Set(),selectedId:null,selectedOwnership:null};
 const panel=document.createElement('aside');panel.className='shop-panel';panel.setAttribute('aria-label','규격 확인 상품');panel.inert=true;
-panel.innerHTML=`<div class="shop-top"><button class="shop-close" aria-label="상품 패널 닫기">×</button><div class="shop-kicker">1R / VERIFIED CATALOG</div><h2>방에 맞는 실제 상품</h2><p>정확한 옵션과 조립 후 규격이 확인된 상품만.<br>내가 가진 물건은 그대로, 필요한 물건만 찾아보세요.</p></div><div class="shop-tabs" role="tablist"><button data-tab="recommend" role="tab">가구별 추천</button><button data-tab="search" role="tab">조건 검색</button><button data-tab="list" role="tab">구매 목록</button></div><div class="shop-scroll"><div class="shop-status" id="shopStatus"></div><div id="shopSelection"></div><div id="shopControls"></div><div id="shopResults"></div><div class="shop-feedback" id="shopFeedback" role="status"></div></div><div class="shop-footer">규격은 제조사·판매자 표기를 확인한 정보이며 직접 실측한 값이 아닙니다. 단순 3D 모델은 실제 외형과 다를 수 있습니다.<br><a class="muted-link" href="/admin/" target="_blank" rel="noopener">운영자 검수 도구</a> · <a class="muted-link" href="/docs/product-policy.html" target="_blank" rel="noopener">상품 정보 기준</a></div>`;
+panel.innerHTML=`<div class="shop-top"><button class="shop-close" aria-label="상품 패널 닫기">×</button><h2>가구 찾기</h2><span class="pill">규격 확인 상품</span></div><div class="shop-tabs" role="tablist"><button data-tab="recommend" role="tab">추천</button><button data-tab="search" role="tab">검색</button><button data-tab="list" role="tab">구매 목록</button></div><div class="shop-scroll"><div class="shop-status" id="shopStatus"></div><div id="shopSelection"></div><div id="shopControls"></div><div id="shopResults"></div><div class="shop-feedback" id="shopFeedback" role="status"></div></div><div class="shop-footer"><a class="muted-link" href="${new URL('../docs/product-policy.html',import.meta.url)}" target="_blank" rel="noopener">상품 정보 기준</a><span> · 표기 규격 기준 · 배치용 모형</span></div>`;
 document.body.append(panel);
 const modal=document.createElement('dialog');modal.className='shop-modal';document.body.append(modal);
 const format=n=>new Intl.NumberFormat('ko-KR').format(n),cm=o=>`${o.widthCm} × ${o.depthCm} × ${o.heightCm} cm`;
 function say(message){$('#shopFeedback').textContent=message;}
 async function api(action,body=null) {
-  const response=await fetch('/api/commerce?action='+encodeURIComponent(action),{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(14000),cache:'no-store'});
-  let data;try{data=await response.json();}catch{throw Error('상품 서버를 찾을 수 없습니다. npm start 또는 Vercel에서 실행하세요.');}
+  const response=await fetch(new URL('../api/commerce?action='+encodeURIComponent(action),import.meta.url),{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(14000),cache:'no-store'});
+  let data;try{data=await response.json();}catch{throw Error('상품 정보를 불러오지 못했습니다. 잠시 후 다시 시도하세요.');}
   if(!response.ok)throw Error(data.error?.message||'요청을 처리하지 못했습니다.');return data;
 }
 function currentOffer(id){const o=state.offers.get(id);return o&&Date.now()-Date.parse(o.checkedAt)<300000?o:null;}
@@ -20,14 +20,14 @@ async function loadCatalog() {
   try {
     const result=await api('catalog');state.options=verifiedOptions({schemaVersion:1,options:result.options});state.loaded=true;
     state.status=await api('status').catch(()=>null);
-  }catch(error){state.error=error.message;}
+  }catch(error){try{const fallback=await fetch(new URL('../catalog.json',import.meta.url),{cache:'no-store'});if(!fallback.ok)throw error;const data=await fallback.json();state.options=verifiedOptions(data);state.status={configured:false};state.loaded=true;}catch{state.error=error.message;}}
   state.loading=false;render();updateBinding();
 }
 function open(tab='recommend') {
-  state.open=true;state.tab=tab;panel.inert=false;panel.classList.add('open');
+  state.open=true;state.tab=tab;panel.inert=false;panel.classList.add('open');document.body.classList.add('shop-open');document.body.classList.remove('inspector-open');
   const selected=planner?.getSelected();syncSelected(selected);render();if(!state.loaded&&!state.loading)loadCatalog();panel.querySelector('.shop-close').focus();
 }
-function close(){state.open=false;panel.classList.remove('open');panel.inert=true;$('#openShop')?.focus();}
+function close(){state.open=false;panel.classList.remove('open');document.body.classList.remove('shop-open');panel.inert=true;$('#openShop')?.focus();}
 function syncSelected(sel) {
   if((sel?.id??null)===state.selectedId&&(sel?.ownership||'unknown')===state.selectedOwnership)return false;
   const newId=(sel?.id??null)!==state.selectedId;state.selectedId=sel?.id??null;state.selectedOwnership=sel?.ownership||'unknown';state.includeOwned=false;
@@ -40,18 +40,18 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&state.open&&!modal.open)clos
 panel.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;render();});
 function render(){
  panel.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===state.tab);b.setAttribute('aria-selected',String(b.dataset.tab===state.tab));});
- $('#shopStatus').innerHTML=`<span class="pill">규격 확인 ${state.options.length} / 200</span><span class="pill ${state.status?.configured?'':'warn'}">${state.status?.configured?'서버 키 설정됨 · 연결 검증 별도':'API 키 미등록 또는 서버 미연결'}</span>`;
+ $('#shopStatus').textContent=state.options.length?`상품 ${state.options.length}개`:'';
  renderSelection();renderControls();renderResults();
 }
 function renderSelection(){
  const o=planner?.getSelected();let html='';
- if(state.tab==='recommend')html=o?`<div class="shop-selection"><strong>${esc(o.name)}</strong>${o.w} × ${o.d} × ${o.h} cm · ${['owned','fixed'].includes(o.ownership)?'보유/기존 물건':'새 상품 검토'}<br><small>현재 위치를 유지하고, 선택한 상품의 실제 표기 규격으로 교체합니다.</small></div>`:'<div class="shop-selection"><strong>먼저 가구를 선택하세요</strong>평면도에서 책상·선반 등 물건을 선택하면 크기 조건을 가져옵니다.</div>';
+ if(state.tab==='recommend')html=o?`<div class="shop-selection"><strong>${esc(o.name)}</strong>${o.w} × ${o.d} × ${o.h} cm · ${['owned','fixed'].includes(o.ownership)?'보유/기존 물건':'새 상품 검토'}</div>`:'<div class="shop-selection"><strong>가구를 선택하세요.</strong></div>';
  $('#shopSelection').innerHTML=html;
 }
 function renderControls(){
- const box=$('#shopControls');if(state.tab==='list'){box.innerHTML='';return;}
+ const box=$('#shopControls');if(state.tab==='list'||!state.options.length){box.innerHTML='';return;}
  const selected=planner?.getSelected(),owned=selected&&['owned','fixed'].includes(selected.ownership);
- box.innerHTML=`${state.tab==='recommend'&&owned?`<label class="owned-prompt"><input type="checkbox" id="shopOwned" ${state.includeOwned?'checked':''}> 이미 가진 물건입니다. 교체 상품도 찾아보기</label>`:''}<div class="shop-controls"><label>카탈로그 검색어<input id="shopQuery" type="search" maxlength="120" placeholder="예: 1800 책상, 좁은 선반" value="${esc(state.query)}"></label>${state.tab==='search'?`<label>상품군<select id="shopCategory"><option value="">전체 상품군</option>${CATEGORIES.map(c=>`<option value="${c.id}" ${state.category===c.id?'selected':''}>${c.name}</option>`).join('')}</select></label>`:''}<div class="shop-dims">${[['maxWidth','가로 상한'],['maxDepth','깊이 상한'],['maxHeight','높이 상한']].map(([k,l])=>`<label>${l} cm<input data-limit="${k}" type="number" min="1" max="2000" placeholder="제한 없음" value="${esc(state[k])}"></label>`).join('')}</div><label>정렬<select id="shopSort"><option value="fit">배치 치수 적합순</option><option value="best">베스트 출처 우선 (판매순 아님)</option><option value="name">상품명</option></select></label></div><p class="shop-caption">A 추천과 B 검색 모두 같은 검수 기준을 적용합니다. 쿠팡 전체 실시간 검색이 아닙니다. 가로·깊이 방향을 바꾸려면 상한값도 바꿔 확인하세요.</p>`;
+ box.innerHTML=`${state.tab==='recommend'&&owned?`<label class="owned-prompt"><input type="checkbox" id="shopOwned" ${state.includeOwned?'checked':''}> 보유 중 · 교체 상품 찾기</label>`:''}<div class="shop-controls"><label>검색어<input id="shopQuery" type="search" maxlength="120" placeholder="예: 1800 책상, 좁은 선반" value="${esc(state.query)}"></label>${state.tab==='search'?`<label>상품군<select id="shopCategory"><option value="">전체 상품군</option>${CATEGORIES.map(c=>`<option value="${c.id}" ${state.category===c.id?'selected':''}>${c.name}</option>`).join('')}</select></label>`:''}<div class="shop-dims">${[['maxWidth','가로 상한'],['maxDepth','깊이 상한'],['maxHeight','높이 상한']].map(([k,l])=>`<label>${l} cm<input data-limit="${k}" type="number" min="1" max="2000" placeholder="제한 없음" value="${esc(state[k])}"></label>`).join('')}</div><label>정렬<select id="shopSort"><option value="fit">배치 치수 적합순</option><option value="best">베스트 참고순</option><option value="name">상품명</option></select></label></div><details class="search-help"><summary>검색 기준</summary><p>표기 규격을 확인한 옵션만 검색합니다. 베스트 참고순은 판매량 순위가 아닙니다. 가로·깊이 방향이 바뀌면 조건도 바꿔 주세요.</p></details>`;
  $('#shopSort').value=state.sort;
  $('#shopQuery').oninput=e=>{state.query=e.target.value;renderResults();};
  $('#shopCategory')?.addEventListener('change',e=>{state.category=e.target.value;renderResults();});
@@ -73,9 +73,9 @@ function renderResults(){
  const el=$('#shopResults'),selected=planner?.getSelected();
  if(state.loading){el.innerHTML='<div class="empty-catalog"><p>검수된 카탈로그를 불러오는 중입니다…</p></div>';return;}
  if(state.error){el.innerHTML=`<div class="empty-catalog"><h3>상품 서버에 연결하지 못했습니다</h3><p>${esc(state.error)}</p><button class="shop-retry" id="retryCatalog">다시 확인</button></div>`;$('#retryCatalog').onclick=loadCatalog;return;}
- if(state.tab==='recommend'&&selected&&['owned','fixed'].includes(selected.ownership)&&!state.includeOwned){el.innerHTML='<div class="empty-catalog"><h3>이미 가진 물건은 다시 권하지 않아요</h3><p>구매 목록에서도 제외됩니다. 교체가 필요할 때 위의 체크를 켜세요.</p></div>';return;}
+ if(state.tab==='recommend'&&selected&&['owned','fixed'].includes(selected.ownership)&&!state.includeOwned){el.innerHTML='<div class="empty-catalog"><h3>보유 중</h3><p>필요하면 교체 상품을 찾아보세요.</p></div>';return;}
  if(state.tab==='recommend'&&!selected){el.innerHTML='';return;}
- if(!state.options.length){el.innerHTML='<div class="empty-catalog"><div class="empty-mark">0</div><h3>검수된 상품을 준비하고 있습니다</h3><p>미확인 상품이나 가상의 상품으로 채우지 않습니다. API 키를 등록하면 운영자가 베스트·검색 후보를 수집할 수 있고, 정확한 옵션과 치수를 확인한 뒤 공개합니다.</p><a href="/admin/" target="_blank" rel="noopener">운영자 상품 검수 열기 →</a></div>';return;}
+ if(!state.options.length){el.innerHTML='<div class="empty-catalog"><h3>상품 추천 준비 중</h3><p>가구 배치는 계속할 수 있습니다.</p><button id="continueEditing">배치 계속하기</button></div>';$('#continueEditing').onclick=close;return;}
  const constraints={query:state.query,category:state.tab==='search'?state.category:'',type:state.tab==='recommend'?selected?.type:'',sort:state.sort};
  for(const k of ['maxWidth','maxDepth','maxHeight']){const n=Number(state[k]);constraints[k]=Number.isFinite(n)&&n>0?n:null;}
  const rows=recommend(state.options,constraints);
@@ -105,10 +105,10 @@ function preview(id){
  const option=state.options.find(o=>o.id===id);if(!option||!eligibility(option).eligible){say('이 옵션은 재확인이 필요합니다.');return;}
  const selected=state.tab==='recommend'?planner.getSelected():null,doc=planner.getState(),d=option.dimensions;
  const candidate={...(selected||{id:'preview',x:doc.room.w/2,z:doc.room.d/2,r:0}),type:option.type,name:option.product.name,w:d.widthCm,d:d.depthCm,h:d.heightCm,geometry:d.geometry};
- const warnings=placementWarnings(candidate,doc.objects,doc.room);
- modal.innerHTML=`<div class="preview-inner"><div class="shop-kicker">EXACT OPTION / PLACEMENT</div><h3>${selected?'상품 교체 미리보기':'상품 배치 미리보기'}</h3><p>${esc(option.product.name)}<br>${esc(option.product.optionLabel)}</p><div class="preview-compare">${selected?`현재: ${selected.w} × ${selected.d} × ${selected.h} cm<br>`:''}<b>적용: ${cm(d)}</b></div>${warnings.length?`<div class="preview-warnings">${warnings.map(w=>esc(w)).join('<br>')}</div>`:'<p>현재 입력한 외곽 치수상 중첩을 찾지 못했습니다.</p>'}<p>위치와 방 구조는 바꾸지 않습니다. 통로·문 열림·걸레받이·반입 경로는 별도 확인하세요. 미리보기는 단순 형상이며 설치를 보장하지 않습니다.</p><div class="preview-actions"><button id="cancelProduct">취소</button><button id="confirmProduct" class="primary">${warnings.length?'겹침을 확인했고 적용':'이 규격으로 적용'}</button></div></div>`;
+ const warnings=selected?.placed===false?[]:placementWarnings(candidate,doc.objects.filter(o=>o.placed!==false&&o.id!==candidate.parent&&o.parent!==candidate.id),doc.room);
+ modal.innerHTML=`<div class="preview-inner"><h3>${selected?'상품 교체 미리보기':'상품 배치 미리보기'}</h3><p>${esc(option.product.name)}<br>${esc(option.product.optionLabel)}</p><div class="preview-compare">${selected?`현재: ${selected.w} × ${selected.d} × ${selected.h} cm<br>`:''}<b>적용: ${cm(d)}</b></div>${warnings.length?`<div class="preview-warnings">${warnings.map(w=>esc(w)).join('<br>')}</div>`:'<p>현재 입력한 외곽 치수상 중첩을 찾지 못했습니다.</p>'}<p>위치와 방 구조는 바꾸지 않습니다. 통로·문 열림·걸레받이·반입 경로는 별도 확인하세요. 미리보기는 단순 형상이며 설치를 보장하지 않습니다.</p><div class="preview-actions"><button id="cancelProduct">취소</button><button id="confirmProduct" class="primary">${warnings.length?'겹침을 확인했고 적용':'이 규격으로 적용'}</button></div></div>`;
  modal.showModal();$('#cancelProduct').onclick=()=>modal.close();$('#confirmProduct').onclick=()=>{
-   try{planner.applyProduct(option,selected?.id);modal.close();say('실제 옵션 규격을 적용했습니다. 위치와 방 구조는 유지했습니다.');const undo=document.createElement('button');undo.textContent='상품 적용 되돌리기';undo.onclick=()=>{planner.undoProduct();say('상품 적용을 되돌렸습니다.');};$('#shopFeedback').append(' ',undo);}
+   try{planner.applyProduct(option,selected?.id);modal.close();say('실제 옵션 규격을 적용했습니다. 위치와 방 구조는 유지했습니다.');const undo=document.createElement('button');undo.textContent='상품 적용 되돌리기';undo.onclick=()=>{try{planner.undoProduct();say('상품 적용을 되돌렸습니다.');}catch(e){say(e.message);}};$('#shopFeedback').append(' ',undo);}
    catch(error){modal.close();say(error.message);}
  };
 }
@@ -125,10 +125,10 @@ function renderList(){
  const html=rows.map(o=>{
    const p=state.options.find(p=>p.id===o.commerce.optionId),bound=bindingMatches(o),offer=currentOffer(p?.id),ok=!!p&&bound;
    if(ok&&offer?.price)subtotal+=offer.price;else unknown++;
-   return `<div class="shopping-row"><b>${esc(o.commerce.productName)}</b>${esc(o.commerce.optionLabel)}<br>${o.w} × ${o.d} × ${o.h} cm<br><span class="pill ${ok?'':'warn'}">${!bound?'규격 변경됨 · 구매 전 재확인':!p?'검수 상태 재확인 필요':'구매 예정 · 규격 일치'}</span><p>${ok&&offer?.price?format(offer.price)+'원':'가격 미확인'}</p>${ok?`<button data-price="${p.id}">가격 확인</button><button data-buy="${p.id}">쿠팡에서 보기</button>`:''}<button data-owned="${o.id}">이미 보유로 변경</button></div>`;
+   return `<div class="shopping-row"><b>${esc(o.commerce.productName)}</b>${esc(o.commerce.optionLabel)}<br>${o.w} × ${o.d} × ${o.h} cm<br><span class="pill ${ok?'':'warn'}">${!bound?'규격 변경됨 · 구매 전 재확인':!p?'검수 상태 재확인 필요':'구매 예정 · 규격 일치'}</span><p>${ok&&offer?.price?format(offer.price)+'원':'가격 미확인'}</p>${ok?`<button data-price="${p.id}">가격 확인</button><button data-buy="${p.id}">쿠팡에서 보기</button>`:''}<button data-owned="${esc(o.id)}">이미 보유로 변경</button></div>`;
  }).join('');
  el.innerHTML=`<div class="shopping-summary">확인된 옵션 가격 소계<br><strong>${format(subtotal)}원</strong><br>가격/규격 미확인 ${unknown}개 제외 · 배송비 별도<br>이미 보유하거나 집에 있던 가구는 포함하지 않습니다.</div>${rows.length?html:'<div class="empty-catalog"><h3>아직 연결한 구매 상품이 없습니다</h3><p>규격 확인 상품을 방에 배치하면 이곳에 모입니다. 기존 가구를 구매 예정으로만 바꿔도, 실제 상품을 연결하기 전에는 가격을 추정하지 않습니다.</p></div>'}<p class="product-disclosure">쿠팡 구매 링크는 파트너스 활동의 일환으로 일정액의 수수료를 제공받을 수 있습니다. 최종 가격·배송비·재고는 쿠팡에서 확인하세요.</p>`;
- wireCards(el);el.querySelectorAll('[data-owned]').forEach(b=>b.onclick=()=>planner.setOwnership(Number(b.dataset.owned),'owned'));
+ wireCards(el);el.querySelectorAll('[data-owned]').forEach(b=>b.onclick=()=>planner.setOwnership(b.dataset.owned,'owned'));
 }
 // No browsing, dragging, keystroke or startup event calls the Coupang upstream API.
 // Only explicit price/link buttons and authenticated admin sourcing do so.

@@ -37,7 +37,7 @@ export function updateObject(doc,id,patch){const o=doc.objects.find(o=>String(o.
  const children=descendants(doc,o.id),moves=['x','z','r','e'].some(k=>patch[k]!=null&&patch[k]!==o[k]);if(moves&&children.some(c=>isLocked(doc,c)))throw Error('연결된 물건의 잠금을 먼저 해제하세요.');
  const backup=clone(doc),old=clone(o);Object.assign(o,patch);
  if(moves)for(const c of children){const p=rotate(c.x-old.x,c.z-old.z,o.r-old.r);c.x=o.x+p.x;c.z=o.z+p.z;c.r=(c.r+o.r-old.r+360)%360;c.e=Math.max(0,c.e+(o.e-old.e));}
- try{normalizeDocument(doc);}catch(e){Object.assign(doc,backup);throw e;}return o;
+ try{if(o.type==='ldesk'&&o.geometry&&(!number(o.geometry.mainDepthCm,1,o.d)||!number(o.geometry.returnWidthCm,1,o.w)||!['left','right'].includes(o.geometry.side)))throw Error('ㄱ자 상판 치수가 전체 크기보다 큽니다.');normalizeDocument(doc);}catch(e){Object.assign(doc,backup);throw e;}return o;
 }
 export function addItems(doc,type,count=1,{placed=false,ownership='owned',w,d,h}={}){if(!Number.isInteger(count)||count<1||count>50||doc.objects.length+count>MAX_OBJECTS)throw Error('물건은 최대 250개, 한 번에 50개까지 추가할 수 있습니다.');if(doc.room.structureLocked&&STRUCTURAL.has(type))throw Error('구조 잠금을 먼저 해제하세요.');const added=[];for(let i=0;i<count;i++){const o=makeObject(type,{x:doc.room.w/2,z:doc.room.d/2,placed,ownership});for(const[k,v]of Object.entries({w,d,h}))if(v!=null){if(!number(v,1,2000))throw Error('물건 치수 범위를 확인하세요.');o[k]=v;}if(count>1)o.name+=' '+(i+1);added.push(o);}doc.objects.push(...added);return added;}
 export function setPlaced(doc,id,placed){const o=doc.objects.find(o=>String(o.id)===String(id));requireEditable(doc,o);const children=descendants(doc,id);if(children.some(c=>isLocked(doc,c)))throw Error('연결된 물건의 잠금을 먼저 해제하세요.');o.placed=placed;children.forEach(c=>c.placed=placed);}

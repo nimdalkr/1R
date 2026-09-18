@@ -169,7 +169,7 @@ export function placementWarnings(candidate,objects,room) {
   const warnings=[];
   if(footprint(candidate).some(p=>p.x<0||p.z<0||p.x>room.w||p.z>room.d)) warnings.push('방 외곽을 벗어납니다.');
   for(const o of objects) {
-    if(o.id===candidate.id||['rug','door','window'].includes(o.type)||['rug','lamp','decor'].includes(candidate.type)) continue;
+    if(o.placed===false||o.id===candidate.id||['rug','door','window'].includes(o.type)||['rug','lamp','decor'].includes(candidate.type)) continue;
     const ae=candidate.e||0,be=o.e||0;
     if(ae+candidate.h<=be||be+o.h<=ae) continue;
     if(parts(candidate).some(a=>parts(o).some(b=>sat(a,b)))) warnings.push(`${o.name}의 배치 영역과 겹칩니다.`);
@@ -179,5 +179,5 @@ export function placementWarnings(candidate,objects,room) {
 export function bindingMatches(o) {
   const b=o.commerce?.dimensions;
   if(!b||o.commerce?.type!==o.type) return false;
-  return ['w','d','h'].every((k,i)=>Math.abs(o[k]-b[['widthCm','depthCm','heightCm'][i]])<0.01)&&JSON.stringify(o.geometry||null)===JSON.stringify(b.geometry||null);
+  return ['w','d','h'].every((k,i)=>Math.abs(o[k]-b[['widthCm','depthCm','heightCm'][i]])<0.01)&&JSON.stringify(o.geometry?.kind==='rect'?null:o.geometry||null)===JSON.stringify(b.geometry?.kind==='rect'?null:b.geometry||null);
 }

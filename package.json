@@ -1,10 +1,12 @@
 {
   "name": "1r",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
-  "description": "1R — Korean room planner with option-verified Coupang affiliate catalog",
-  "engines": { "node": ">=22" },
+  "description": "1R — local-first 2D/3D room studio, inventory, layout alternatives and verified furniture",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "start": "node scripts/serve.mjs",
@@ -12,7 +14,8 @@
     "test": "node --test tests/*.test.mjs",
     "catalog:check": "node scripts/catalog.mjs check",
     "catalog:import": "node scripts/catalog.mjs import",
-    "coupang:check": "node scripts/coupang-check.mjs"
+    "coupang:check": "node scripts/coupang-check.mjs",
+    "test:browser": "python tests/studio_browser.py"
   },
   "license": "MIT"
 }
