@@ -1,0 +1,17 @@
+name: Integration source snapshot
+on:
+  push:
+    branches: [work/studio-integration]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git archive --format=zip --output=1r-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: integration-source
+          path: 1r-source.zip
+          retention-days: 2

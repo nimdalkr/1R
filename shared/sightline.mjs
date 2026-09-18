@@ -1,13 +1,11 @@
 import {footprint,inPolygon,rotate,number} from './planner-model.mjs';
-// Conservative envelope analysis; does not model slat openings, transparency or comfort.
+// Conservative envelopes: no slat gaps, transparency, comfort or installation claims.
 export function segmentIntervals(a,b,polygon){const times=[0,1],rx=b.x-a.x,rz=b.z-a.z;for(let i=0;i<polygon.length;i++){const p=polygon[i],q=polygon[(i+1)%polygon.length],sx=q.x-p.x,sz=q.z-p.z,det=rx*sz-rz*sx;if(Math.abs(det)<1e-9)continue;const dx=p.x-a.x,dz=p.z-a.z,t=(dx*sz-dz*sx)/det,u=(dx*rz-dz*rx)/det;if(t>0&&t<1&&u>=0&&u<=1)times.push(t);}times.sort((x,y)=>x-y);const spans=[];for(let i=0;i<times.length-1;i++){const l=times[i],r=times[i+1],t=(l+r)/2;if(inPolygon({x:a.x+rx*t,z:a.z+rz*t},polygon))spans.push([l,r]);}return spans;}
 export function eyePoint(viewer){const base=viewer.type==='bed'?viewer.h+35:viewer.type==='sofa'?viewer.h+20:viewer.type==='chair'?Math.max(65,viewer.h-20):120;return{x:viewer.x,z:viewer.z,y:(viewer.e||0)+(number(viewer.eyeHeight,1,300)?viewer.eyeHeight:base)};}
 export function screenPoint(screen){const offset=rotate(0,screen.d*.05,screen.r);return{x:screen.x+offset.x,z:screen.z+offset.z,y:(screen.e||0)+screen.h*.86};}
-export function sightline(doc,screenId,viewerId){
- const screen=doc.objects.find(o=>String(o.id)===String(screenId)&&o.placed!==false&&o.type==='standby'),viewer=doc.objects.find(o=>String(o.id)===String(viewerId)&&o.placed!==false&&['bed','chair','sofa'].includes(o.type));
- if(!screen||!viewer)return null;
+export function sightline(doc,screenId,viewerId){const screen=doc.objects.find(o=>String(o.id)===String(screenId)&&o.placed!==false&&o.type==='standby'),viewer=doc.objects.find(o=>String(o.id)===String(viewerId)&&o.placed!==false&&['bed','chair','sofa'].includes(o.type));if(!screen||!viewer)return null;
  const from=eyePoint(viewer),to=screenPoint(screen),front=rotate(0,1,screen.r),dx=from.x-to.x,dz=from.z-to.z,dist=Math.hypot(dx,dz);const facingDegrees=dist?Math.acos(Math.max(-1,Math.min(1,(front.x*dx+front.z*dz)/dist)))*180/Math.PI:0;
- const blocked=[];for(const o of doc.objects){if(o.placed===false||o.id===viewer.id||o.id===screen.id||['rug','window','door'].includes(o.type))continue;const intervals=segmentIntervals(from,to,footprint(o));for(const [a,b]of intervals){const ya=from.y+(to.y-from.y)*a,yb=from.y+(to.y-from.y)*b,lo=Math.min(ya,yb),hi=Math.max(ya,yb);if(hi>=(o.e||0)&&lo<=(o.e||0)+o.h){blocked.push({id:o.id,name:o.name});break;}}}
+ const blocked=[];for(const o of doc.objects){if(o.placed===false||o.id===viewer.id||o.id===screen.id||['rug','window','door'].includes(o.type))continue;for(const[a,b]of segmentIntervals(from,to,footprint(o))){const ya=from.y+(to.y-from.y)*a,yb=from.y+(to.y-from.y)*b;if(Math.max(ya,yb)>=(o.e||0)&&Math.min(ya,yb)<=(o.e||0)+o.h){blocked.push({id:o.id,name:o.name});break;}}}
  return{from,to,distanceCm:Math.hypot(dx,dz,from.y-to.y),facingDegrees,behind:facingDegrees>90,blocked,assumption:'외곽 치수 기준 · 시청 편안함과 설치 가능 여부는 별도 확인'};
 }
-export function faceViewer(doc,screenId,viewerId){const s=doc.objects.find(o=>String(o.id)===String(screenId)),v=doc.objects.find(o=>String(o.id)===String(viewerId));if(!s||!v)throw Error('시청 위치를 선택하세요.');return ((Math.atan2(-(v.x-s.x),v.z-s.z)*180/Math.PI)+360)%360;}
+export function faceViewer(doc,screenId,viewerId){const s=doc.objects.find(o=>String(o.id)===String(screenId)),v=doc.objects.find(o=>String(o.id)===String(viewerId));if(!s||!v)throw Error('시청 위치를 선택하세요.');return((Math.atan2(-(v.x-s.x),v.z-s.z)*180/Math.PI)+360)%360;}
