@@ -1,0 +1,89 @@
+name: Apply tested Studio integration
+on:
+  push:
+    branches: [work/studio-integration]
+permissions:
+  contents: write
+concurrency:
+  group: studio-integration-apply
+  cancel-in-progress: false
+jobs:
+  apply-and-check:
+    if: github.event.head_commit.message == 'chore: apply verified 1R studio changes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ONE_R_TEST_OUTPUT: /tmp/1r-studio-qa
+      STUDIO_URL: http://127.0.0.1:4173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply exact hash-verified source delta
+        shell: python
+        run: |
+          from pathlib import Path, PurePosixPath
+          import base64, hashlib, json, lzma
+          payload=base64.b64decode(''.join(Path(f'_integration/part{i}').read_text() for i in range(4)),validate=True)
+          assert hashlib.sha256(payload).hexdigest()=='5b5743ccd6a396a3b1eff6d25788d21b3387f8a34a1eeca07b695de84d4814c9'
+          raw=lzma.decompress(payload)
+          assert hashlib.sha256(raw).hexdigest()=='589cd7e3f9cddad89ddfc79e97da4934ac7289e78fef089fb97db05cd2b735d2'
+          records=json.loads(raw)
+          expected={'README.md','assets/commerce.css','assets/commerce.js','assets/favicon.svg','assets/plan.js','assets/studio.css','assets/studio.js','docs/STUDIO.md','index.html','package.json','scripts/build.mjs','shared/catalog.mjs','shared/planner-model.mjs','shared/templates.mjs','tests/browser_acceptance.py','tests/browser_offline.py','tests/mesh.test.mjs','tests/studio-integration.test.mjs','tests/studio_browser.py','tests/studio_harness.py'}
+          assert len(records)==20 and {r['path'] for r in records}==expected
+          for r in records:
+              path=Path(r['path'])
+              assert not path.is_absolute() and '..' not in path.parts and not path.is_symlink()
+              old=path.read_text(encoding='utf-8') if path.exists() else ''
+              assert hashlib.sha256(old.encode()).hexdigest()==r['base'],r['path']+' base mismatch'
+              new=old
+              for a,b,text in reversed(r['edits']):
+                  assert isinstance(a,int) and isinstance(b,int) and 0<=a<=b<=len(old)
+                  new=new[:a]+text+new[b:]
+              assert hashlib.sha256(new.encode()).hexdigest()==r['hash'],r['path']+' final mismatch'
+              path.parent.mkdir(parents=True,exist_ok=True)
+              path.write_text(new,encoding='utf-8')
+          print('20 exact-source files verified and applied')
+      - run: npm test
+      - run: npm run catalog:check
+      - run: npm run build
+      - name: Install browser test runtime
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+          echo "CHROMIUM_PATH=$(python -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()')" >> "$GITHUB_ENV"
+      - name: Real HTTP browser acceptance
+        run: |
+          CATALOG_ADMIN_TOKEN=ci-test-only-not-a-production-key node scripts/serve.mjs >/tmp/1r-studio-server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break || sleep 1; done
+          python tests/studio_browser.py
+      - name: Publish accepted source to work branch only
+        run: |
+          git add README.md assets/commerce.css assets/commerce.js assets/favicon.svg assets/plan.js assets/studio.css assets/studio.js docs/STUDIO.md index.html package.json scripts/build.mjs shared/catalog.mjs shared/planner-model.mjs shared/templates.mjs tests/browser_acceptance.py tests/browser_offline.py tests/mesh.test.mjs tests/studio-integration.test.mjs tests/studio_browser.py tests/studio_harness.py
+          git rm -r _integration
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: complete 1R Studio integration with HTTP browser QA'
+          git fetch origin work/studio-integration
+          test "$(git rev-parse origin/work/studio-integration)" = "$GITHUB_SHA"
+          git push origin HEAD:work/studio-integration
+          git rev-parse HEAD > /tmp/1r-studio-qa/tested-commit.txt
+          git archive --format=zip --output=/tmp/1r-tested-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-http-qa
+          path: |
+            /tmp/1r-studio-qa/
+            /tmp/1r-studio-server.log
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: studio-tested-source
+          path: /tmp/1r-tested-source.zip
+          retention-days: 7
