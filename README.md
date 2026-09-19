@@ -28,19 +28,25 @@
 cp .env.example .env.local
 # .env.local에 COUPANG_ACCESS_KEY / COUPANG_SECRET_KEY 입력
 npm test
-npm run build
+npm run build:web
 npm start
 ```
 
-기본 주소는 `http://127.0.0.1:4173`, 검수 화면은 `/admin/`입니다. 외부 런타임 패키지가 없어 `npm install`은 필요하지 않습니다. 키가 없어도 기존 배치 기능과 JSON 검수 도구는 작동하며, API 호출은 명확한 설정 안내로 중단됩니다.
+기본 주소는 `http://127.0.0.1:4173`, 검수 화면은 `/admin/`입니다. 이 로컬 실행 경로는 외부 런타임 패키지가 필요하지 않습니다. Sites 빌드는 아래의 `npm ci`가 필요합니다. 키가 없어도 기존 배치 기능과 JSON 검수 도구는 작동하며, API 호출은 명확한 설정 안내로 중단됩니다.
 
 로컬 시작 시 관리자 토큰이 없으면 **로컬 전용 임시 토큰**을 터미널에 출력합니다. 그 값을 검수 화면에 입력하세요. 쿠팡 API 키를 검수 화면에 넣지 마세요. 편집 중 초안은 탭 메모리에 있으므로 ‘작업 초안 저장’으로 보관하세요.
 
-소스 변경 후 `npm run build`로 정적 파일을 다시 만들고, 카탈로그/서버 변경 후 서버를 재시작합니다. API를 포함한 v1.2는 단일 HTML 파일 더블클릭 방식이 아니라 HTTP 서버에서 실행해야 합니다.
+소스 변경 후 `npm run build:web`으로 정적 파일을 다시 만들고, 카탈로그/서버 변경 후 서버를 재시작합니다. API를 포함한 v1.2는 단일 HTML 파일 더블클릭 방식이 아니라 HTTP 서버에서 실행해야 합니다.
+
+## ChatGPT Sites
+
+기존 UI·편집 모듈을 그대로 유지한 Worker 배포입니다. `.openai/hosting.json`의 프로젝트를 재사용하며, `npm ci && npm run build`로 `dist/server/index.js`를 생성합니다. 자세한 운영·검수 기록은 [Sites 배포](docs/SITES.md)를 확인하세요.
+
+`npm run dev`는 동일한 Worker 빌드를 로컬 HTTP로 제공합니다. 상품 추천은 승인 상품이 없는 동안 ‘준비 중’이며, 편집·저장·내 물건·비교·시점·시청선은 키 없이 사용합니다. 쿠팡 키와 관리자 토큰은 나중에 Sites의 **서버 비밀 환경변수**로 등록하며 GitHub, 클라이언트, 빌드에 넣지 않습니다. 방 작업은 기존처럼 각 브라우저에만 저장됩니다.
 
 ## Vercel 설정
 
-Framework Preset: **Other**, Node.js **22.x**. 저장소의 `vercel.json`이 빌드 명령 `npm run build`, 정적 출력 `dist`, 서버 함수 `api/commerce.mjs`를 지정합니다.
+Framework Preset: **Other**, Node.js **22.x**. 저장소의 `vercel.json`이 빌드 명령 `npm run build:web`, 정적 출력 `dist`, 서버 함수 `api/commerce.mjs`를 지정합니다.
 
 | 환경변수 | 필요성 |
 |---|---|

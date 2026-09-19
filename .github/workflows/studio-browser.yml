@@ -23,6 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm ci
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -34,7 +35,7 @@ jobs:
           echo "CHROMIUM_PATH=$(python -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()')" >> "$GITHUB_ENV"
       - name: Desktop, mobile and software-renderer HTTP checks
         run: |
-          CATALOG_ADMIN_TOKEN=ci-test-only-not-a-production-key node scripts/serve.mjs >/tmp/1r-studio-server.log 2>&1 &
+          CATALOG_ADMIN_TOKEN=ci-test-only-not-a-production-key node scripts/serve.mjs --sites >/tmp/1r-studio-server.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break || sleep 1; done
           python tests/studio_browser.py
       - uses: actions/upload-artifact@v4

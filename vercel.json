@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
   "cleanUrls": true,
   "functions": { "api/commerce.mjs": { "maxDuration": 15, "includeFiles": "data/catalog.json" } },
